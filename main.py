@@ -7,10 +7,10 @@ import time
 from hashlib import md5
 
 
-def has_same_metadata(source, replica):
+def has_same_metadata(source_file, replica_file):
     """Compere items modification date and size"""
-    return (os.path.getmtime(source) == os.path.getmtime(replica)
-            or os.path.getsize(source) == os.path.getsize(replica))
+    return (os.path.getmtime(source_file) == os.path.getmtime(replica_file)
+            or os.path.getsize(source_file) == os.path.getsize(replica_file))
 
 
 def has_same_content(source_file, replica_file):
@@ -22,25 +22,25 @@ def has_same_content(source_file, replica_file):
     return source_h == replica_h
 
 
-def synchronize_files(source_f, replica_f, content_comparison_mode):
+def synchronize_files(source_file, replica_file, content_comparison):
     """Checking whether replica file is synchronized with source, if not then perform synchronization"""
 
-    if not os.path.exists(replica_f):
+    if not os.path.exists(replica_file):
         # if file doesn't exist
-        logging.info(f"Replica FILE {replica_f} doesn't exist. Copying source FILE into replica path.")
-        shutil.copy2(source_f, replica_f)
+        logging.info(f"Replica FILE {replica_file} doesn't exist. Copying source FILE into replica path.")
+        shutil.copy2(source_file, replica_file)
     else:
-        file_up_to_date = has_same_content(source_f, replica_f) if content_comparison_mode else has_same_metadata(
-            source_f, replica_f)
+        file_up_to_date = has_same_content(source_file, replica_file) if content_comparison else has_same_metadata(
+            source_file, replica_file)
 
         if not file_up_to_date:
             # if file changed replace it with source file
-            logging.info(f"Replica FILE {replica_f} changed. Replacing it with source FILE.")
-            shutil.copy2(source_f, replica_f)
+            logging.info(f"Replica FILE {replica_file} changed. Replacing it with source FILE.")
+            shutil.copy2(source_file, replica_file)
 
 
 def remove_not_existing_items(source_path, replica_path):
-    """From replica folder remove items which don't exist in source folder anymore."""
+    """From replica folder remove items which don't exist in source folder anymore"""
     for f in os.listdir(replica_path):
         # f can be a file or folder name
         source_f = f"{source_path}/{f}"
@@ -53,7 +53,7 @@ def remove_not_existing_items(source_path, replica_path):
                 shutil.rmtree(replica_f)
 
 
-def synchronize_folders(source_path: str, replica_path: str, content_comparison_mode: bool) -> None:
+def synchronize_folders(source_path: str, replica_path: str, content_comparison: bool) -> None:
     """Checking whether replica folder is synchronized with source, if not then perform synchronization"""
     if not os.path.exists(replica_path):
         # if replica folder doesn't exist
@@ -68,9 +68,9 @@ def synchronize_folders(source_path: str, replica_path: str, content_comparison_
             replica_f = f"{replica_path}/{f}"
 
             if os.path.isfile(source_f):
-                synchronize_files(source_f, replica_f, content_comparison_mode)
+                synchronize_files(source_f, replica_f, content_comparison)
             elif os.path.isdir(source_f):
-                synchronize_folders(source_f, replica_f, content_comparison_mode)
+                synchronize_folders(source_f, replica_f, content_comparison)
 
         # if files or folders aren't in source path
         remove_not_existing_items(source_path, replica_path)
@@ -88,11 +88,11 @@ if __name__ == '__main__':
                         default=3600,
                         required=False, type=int)
 
-    parser.add_argument("-c", "--content_comparison",
-                        help="(optional) synchronization mode, if True files content is processed (processing time "
-                             "depends on files size). False means comparing files depends only on modification date "
-                             "and size of file (shorten synchronization time but is less accurate) ",
-                        default=True,
+    parser.add_argument("-c", "--comparison_mode",
+                        help="(optional) comparison mode, by default or if set to 'content' files content is compared "
+                             "by their hashes comparison (processing time depends on files size). Setting 'metadata' "
+                             "means files modification dates and sizes are compared (it shortens synchronization time "
+                             "but solution can be less accurate)",
                         required=False)
 
     args = parser.parse_args()
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     replica_path = args.replica
     logs_path = args.logs
     interval = args.interval
-    content_comparison_mode = False if args.content_comparison == "false" else True
+    content_comparison_mode = False if args.comparison_mode == "metadata" else True
 
     logging.basicConfig(level=logging.NOTSET, handlers=[
         logging.FileHandler(logs_path),
@@ -110,9 +110,12 @@ if __name__ == '__main__':
 
     while True:
         logging.info(msg=f"Start synchronization of replica folder: {replica_path} with source folder: {source_path}")
-        logging.info(msg=f"Files comparison is performed based on files {'CONTENT' if content_comparison_mode else 'METADATA'}")
+        logging.info(msg=f"Files comparison is performed based on files "
+                         f"{'CONTENT' if content_comparison_mode else 'METADATA'}")
         start_time = time.time()
         synchronize_folders(source_path, replica_path, content_comparison_mode)
         execution_time = time.time() - start_time
+        logging.info(msg=f"Synchronization completed in {execution_time}s")
+
         if execution_time < interval:
             time.sleep(interval - execution_time)
