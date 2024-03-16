@@ -7,15 +7,17 @@ import time
 from hashlib import md5
 
 
-def has_same_metadata(source_f, replica_f):
-    return (os.path.getmtime(source_f) == os.path.getmtime(replica_f)
-            or os.path.getsize(source_f) == os.path.getsize(replica_f))
+def has_same_metadata(source, replica):
+    """Compere items modification date and size"""
+    return (os.path.getmtime(source) == os.path.getmtime(replica)
+            or os.path.getsize(source) == os.path.getsize(replica))
 
 
-def has_same_content(source_f, replica_f):
-    with open(source_f, 'rb') as f:
+def has_same_content(source_file, replica_file):
+    """Compere files content"""
+    with open(source_file, 'rb') as f:
         source_h = md5(f.read()).hexdigest()
-    with open(replica_f, 'rb') as f:
+    with open(replica_file, 'rb') as f:
         replica_h = md5(f.read()).hexdigest()
     return source_h == replica_h
 
