@@ -3,17 +3,11 @@ import logging
 import os
 import shutil
 import sys
+import time
 
 
-def exist_but_modified(source_path: str, replica_path: str) -> None:
-    logging.info(f"{replica_path} was modified. Copying source and replacing in replica folder.")
-    if os.path.isfile(source_path):
-        shutil.copy2(source_path, replica_path)
-    elif os.path.isdir(source_path):
-        synchronize_folder(source_path, replica_path)
-
-
-def synchronize_folder(source_path: str, replica_path: str) -> None:
+def synchronize_folders(source_path: str, replica_path: str) -> None:
+    """Checking whether replica folder is synchronized with source, if not then perform synchronization"""
     if not os.path.exists(replica_path):
         # if replica folder doesn't exist
         logging.info(
@@ -21,34 +15,28 @@ def synchronize_folder(source_path: str, replica_path: str) -> None:
         shutil.copytree(source_path, replica_path)
     else:
         # if replica folder exist then iterate over files/folders in source path
-        print("source files", os.listdir(source_path))
         for f in os.listdir(source_path):
-            # f can be a file or folder
-            print(f)
+            # f can be a file or folder name
             source_f = f"{source_path}/{f}"
             replica_f = f"{replica_path}/{f}"
-            print(os.stat(source_f))
-            print(os.stat(replica_f))
-            if f.startswith('.'):
-                logging.warning(f"{source_f} is hidden and can't be synchronized.")
-                continue
 
             if os.path.isfile(source_f):
-
                 if not os.path.exists(replica_f):
                     # if file doesn't exist
                     logging.info(f"Replica FILE {replica_f} doesn't exist. Copying source FILE into replica path.")
                     shutil.copy2(source_f, replica_f)
-                elif os.path.getmtime(source_f) != os.path.getmtime(replica_f):  # todo size??
+                elif os.path.getmtime(source_f) != os.path.getmtime(replica_f) or os.path.getsize(
+                        source_f) != os.path.getsize(replica_f):
                     # if file was modified
                     logging.info(f"Replica FILE {replica_f} was modified. Replacing it with source FILE.")
                     shutil.copy2(source_f, replica_f)
 
             elif os.path.isdir(source_f):
-                synchronize_folder(source_f, replica_f)
+                synchronize_folders(source_f, replica_f)
 
         # if files or folders aren't in source path
         for f in os.listdir(replica_path):
+            # f can be a file or folder name
             source_f = f"{source_path}/{f}"
             replica_f = f"{replica_path}/{f}"
             if not os.path.exists(source_f):
@@ -62,12 +50,12 @@ def synchronize_folder(source_path: str, replica_path: str) -> None:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Program that synchronizes two folders: source and replica. Requires to pass arguments.")
-    parser.add_argument("-s", "--source", help="path to source folder")
-    parser.add_argument("-r", "--replica", help="path to source folder")
-    parser.add_argument("-l", "--logs", help="path log file")
+    parser.add_argument("-s", "--source", help="(required) path to source folder", required=True)
+    parser.add_argument("-r", "--replica", help="(required) path to source folder", required=True)
+    parser.add_argument("-l", "--logs", help="(required) path log file", required=True)
 
-    parser.add_argument("-i", "--interval", help="synchronization interval [s], 3600 by default", default=3600,
-                        required=False)
+    parser.add_argument("-i", "--interval", help="(optional) synchronization interval [s], 3600 by default", default=3600,
+                        required=False, type=int)
 
     args = parser.parse_args()
 
@@ -79,7 +67,12 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.NOTSET, handlers=[
         logging.FileHandler(logs_path),
         logging.StreamHandler(sys.stdout)
-    ], format="%(asctime)s %(levelname)s %(message)s")  # , datefmt="%Y-%m-%d %H:%M:%S")
-    logging.info(msg=f"Start synchronization of replica folder: {replica_path} with source folder: {source_path}")
+    ], format="%(asctime)s %(levelname)s %(message)s")
 
-    synchronize_folder(source_path, replica_path)
+    while True:
+        logging.info(msg=f"Start synchronization of replica folder: {replica_path} with source folder: {source_path}")
+        start_time = time.time()
+        synchronize_folders(source_path, replica_path)
+        execution_time = time.time() - start_time
+        if execution_time < interval:
+            time.sleep(interval - execution_time)
